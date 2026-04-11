@@ -1,0 +1,1006 @@
+CodeForge — Stage-by-Stage Build Guide
+========================================
+
+This is your bible. Each stage is small, ends in something working you can see, and explains *why* every file exists. Don't skip ahead. Don't add features. Finish a stage, take a screenshot, commit, move on.
+
+Total stages: 16
+Total time: ~12 weeks at ~10 hours/week
+Each stage: ends in a runnable, demo-able state
+
+Each stage is marked with:
+  Goal      — what you'll have working
+  Time      — realistic estimate
+  Files     — what to create
+  Done when — verification checklist
+
+
+================================================================
+STAGE 0 — Learn Just Enough Go (before you write a single line of CodeForge)
+================================================================
+
+Goal: Reach the level where you can write a basic HTTP server in Go without Googling every line.
+Time: 4-6 days, ~3 hours/day
+
+What to do, in order:
+
+1. Install Go (go.dev/dl). Verify with `go version`.
+2. A Tour of Go — go.dev/tour — do every section. ~4 hours. Don't skim.
+3. Learn Go with Tests — quii.gitbook.io/learn-go-with-tests — do chapters 1-12 minimum. Skip the rest for now.
+4. Build a throwaway: a CLI tool that takes a URL, fetches it, and prints the response status + content length. ~50 lines. Write it in one sitting without copy-pasting.
+5. Build a second throwaway: an HTTP server with three endpoints (/, /health, /echo?msg=hello). Use only net/http from stdlib, no frameworks. ~80 lines.
+
+Why these specific exercises: the CLI teaches you error handling, structs, and stdlib usage. The HTTP server teaches you handlers, routing basics, and how Go's http package works — which is the foundation for everything in CodeForge.
+
+Done when: you can write the HTTP server above from scratch in under 30 minutes without looking anything up.
+
+Don't move on until this is true. Otherwise you'll spend Stage 1 learning Go *and* learning the project, and you'll burn out.
+
+
+================================================================
+STAGE 1 — Project Skeleton & "Hello World"
+================================================================
+
+Goal: Get a Go server and a React frontend running locally, talking to each other.
+Time: 2-3 days
+
+Files to create:
+
+  codeforge/
+  ├── README.md
+  ├── .gitignore
+  ├── docker-compose.yml
+  ├── backend/
+  │   ├── go.mod
+  │   ├── go.sum
+  │   ├── cmd/
+  │   │   └── server/
+  │   │       └── main.go
+  │   └── internal/
+  │       ├── api/
+  │       │   └── health.go
+  │       └── config/
+  │           └── config.go
+  └── frontend/
+      ├── package.json
+      ├── tsconfig.json
+      ├── vite.config.ts
+      ├── index.html
+      └── src/
+          ├── main.tsx
+          ├── App.tsx
+          └── lib/
+              └── api.ts
+
+File-by-file breakdown:
+
+README.md — Stub for now. Just title + one-line description. You'll fill it in later. Why now: GitHub renders it immediately and it forces you to commit to a name.
+
+.gitignore — Standard Go + Node ignores. Get one from gitignore.io/api/go,node,visualstudiocode,macos.
+
+docker-compose.yml — Local infrastructure (Postgres + Redis). You won't use them yet, but having them defined now means Stage 4 is painless. Why Docker Compose: lets you `docker-compose up` and have your whole local stack running, no manual installs.
+
+  version: "3.9"
+  services:
+    postgres:
+      image: postgres:16-alpine
+      environment:
+        POSTGRES_USER: codeforge
+        POSTGRES_PASSWORD: codeforge_dev
+        POSTGRES_DB: codeforge
+      ports:
+        - "5432:5432"
+      volumes:
+        - pgdata:/var/lib/postgresql/data
+    redis:
+      image: redis:7-alpine
+      ports:
+        - "6379:6379"
+  volumes:
+    pgdata:
+
+backend/go.mod — Your Go module file. Created with `go mod init github.com/<your-username>/codeforge/backend`. This declares your module path and tracks dependencies.
+
+backend/cmd/server/main.go — Entry point of the backend. Convention: cmd/<binary-name>/main.go. Why this convention: standard Go layout (golang-standards/project-layout). Recruiters notice. The file should be tiny — just wire up config, router, and start the server.
+
+  package main
+
+  import (
+      "log"
+      "net/http"
+
+      "github.com/<you>/codeforge/backend/internal/api"
+      "github.com/<you>/codeforge/backend/internal/config"
+  )
+
+  func main() {
+      cfg := config.Load()
+
+      mux := http.NewServeMux()
+      mux.HandleFunc("/health", api.HealthHandler)
+
+      log.Printf("listening on :%s", cfg.Port)
+      if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
+          log.Fatal(err)
+      }
+  }
+
+backend/internal/api/health.go — A single handler that returns {"status":"ok"}. Why: gives you something to hit from the frontend in this stage and from your deploy environment later. Health endpoints are infrastructure plumbing every real backend needs.
+
+  package api
+
+  import (
+      "encoding/json"
+      "net/http"
+  )
+
+  func HealthHandler(w http.ResponseWriter, r *http.Request) {
+      w.Header().Set("Content-Type", "application/json")
+      json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+  }
+
+backend/internal/config/config.go — Reads environment variables into a typed struct. Why a separate file: configuration is something you'll add to constantly (DB URLs, JWT secrets, Redis URLs, etc.). Centralizing it now means you never `os.Getenv` scattered across the codebase.
+
+  package config
+
+  import "os"
+
+  type Config struct {
+      Port string
+  }
+
+  func Load() *Config {
+      return &Config{
+          Port: getEnv("PORT", "8080"),
+      }
+  }
+
+  func getEnv(key, fallback string) string {
+      if v := os.Getenv(key); v != "" {
+          return v
+      }
+      return fallback
+  }
+
+frontend/package.json — Scaffolded by `npm create vite@latest frontend -- --template react-ts`. Vite + React + TypeScript template. Don't roll your own.
+
+frontend/vite.config.ts — Vite's config. Add a proxy so /api/* calls during dev go to the Go backend on :8080. Why: avoids CORS during development.
+
+  import { defineConfig } from 'vite'
+  import react from '@vitejs/plugin-react'
+
+  export default defineConfig({
+    plugins: [react()],
+    server: {
+      proxy: {
+        '/api': 'http://localhost:8080',
+      },
+    },
+  })
+
+frontend/src/lib/api.ts — A single tiny module that wraps fetch for talking to the backend. Why: every API call goes through one place, so when you add auth headers in Stage 3 you change one file.
+
+  export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+    const res = await fetch(`/api${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    return res.json()
+  }
+
+NOTE: your backend currently exposes /health, not /api/health. Either add an /api prefix in Go, or call fetch('/health') directly for now. We'll add the /api prefix in Stage 3.
+
+frontend/src/App.tsx — Calls /health and displays the result. The simplest possible end-to-end test. If the page shows {"status":"ok"}, your full stack is wired.
+
+Done when:
+- `cd backend && go run ./cmd/server` starts the Go server
+- `cd frontend && npm run dev` starts Vite on :5173
+- Open browser → see "Backend says: ok"
+- Commit to GitHub. Push.
+
+
+================================================================
+STAGE 2 — Database & Migrations
+================================================================
+
+Goal: Postgres running locally via Docker, schema applied via migrations, Go connects to it.
+Time: 2 days
+
+New files:
+
+  backend/
+  ├── internal/
+  │   └── db/
+  │       ├── db.go
+  │       └── migrations/
+  │           ├── 001_users.up.sql
+  │           ├── 001_users.down.sql
+  │           ├── 002_rooms.up.sql
+  │           ├── 002_rooms.down.sql
+  │           ├── 003_files.up.sql
+  │           └── 003_files.down.sql
+  └── Makefile
+
+backend/internal/db/db.go — Creates a *pgxpool.Pool, the connection pool to Postgres. Why a pool, not single connections: lets multiple goroutines share connections efficiently. pgx is the modern Go driver — faster and more featureful than lib/pq.
+
+  package db
+
+  import (
+      "context"
+      "github.com/jackc/pgx/v5/pgxpool"
+  )
+
+  func New(ctx context.Context, url string) (*pgxpool.Pool, error) {
+      return pgxpool.New(ctx, url)
+  }
+
+Run: `cd backend && go get github.com/jackc/pgx/v5/pgxpool`
+
+backend/internal/db/migrations/001_users.up.sql — Creates the users table. Why migrations as numbered SQL files: standard, version-controlled, works with golang-migrate (the library you'll use to apply them). Down migrations let you roll back.
+
+  CREATE TABLE users (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email         TEXT UNIQUE NOT NULL,
+      username      TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+001_users.down.sql: DROP TABLE users;
+
+002_rooms.up.sql:
+
+  CREATE TABLE rooms (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug       TEXT UNIQUE NOT NULL,
+      name       TEXT NOT NULL,
+      owner_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      is_public  BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX idx_rooms_owner ON rooms(owner_id);
+
+003_files.up.sql:
+
+  CREATE TABLE files (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      room_id    UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+      path       TEXT NOT NULL,
+      language   TEXT NOT NULL,
+      yjs_state  BYTEA,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(room_id, path)
+  );
+  CREATE INDEX idx_files_room ON files(room_id);
+
+Makefile — Shortcuts for common dev commands. Why: typing `make migrate-up` is faster than remembering the full migrate CLI invocation, and it documents what commands exist.
+
+  .PHONY: dev migrate-up migrate-down
+
+  DB_URL=postgres://codeforge:codeforge_dev@localhost:5432/codeforge?sslmode=disable
+
+  dev:
+  	go run ./cmd/server
+
+  migrate-up:
+  	migrate -path ./internal/db/migrations -database "$(DB_URL)" up
+
+  migrate-down:
+  	migrate -path ./internal/db/migrations -database "$(DB_URL)" down 1
+
+Install the CLI: `brew install golang-migrate` (or equivalent).
+
+Update backend/cmd/server/main.go to:
+1. Read DATABASE_URL from config
+2. Connect to Postgres on startup
+3. Add a /health/db endpoint that pings the DB and returns its status
+
+Why split health endpoints: lets you tell the difference between "server is up but DB is down" vs "server is down."
+
+Done when:
+- `docker-compose up -d postgres` brings Postgres up
+- `make migrate-up` creates all three tables
+- psql into the DB and \dt shows users, rooms, files
+- Go server starts, /health/db returns {"db":"ok"}
+
+
+================================================================
+STAGE 3 — Authentication (signup, login, JWT)
+================================================================
+
+Goal: Users can sign up, log in, and the frontend stores a JWT to authenticate future requests.
+Time: 3-4 days
+
+New files:
+
+  backend/
+  └── internal/
+      ├── api/
+      │   ├── router.go         # NEW — central route registration
+      │   ├── auth.go           # NEW — signup/login handlers
+      │   └── middleware.go     # NEW — JWT auth middleware
+      ├── auth/
+      │   ├── jwt.go            # NEW
+      │   └── password.go       # NEW
+      └── users/
+          ├── store.go          # NEW — DB queries for users
+          └── service.go        # NEW — signup/login business logic
+
+  frontend/
+  └── src/
+      ├── pages/
+      │   ├── Login.tsx         # NEW
+      │   └── Signup.tsx        # NEW
+      ├── hooks/
+      │   └── useAuth.ts        # NEW
+      └── lib/
+          └── store.ts          # NEW — Zustand store for auth state
+
+Backend file purposes:
+
+backend/internal/api/router.go — Central place where all routes are registered. Why: as you add endpoints you don't want to clutter main.go. This file is where you wire middleware, group routes by prefix, and apply auth.
+
+  package api
+
+  import (
+      "net/http"
+      "github.com/go-chi/chi/v5"
+      "github.com/go-chi/chi/v5/middleware"
+  )
+
+  func NewRouter(deps *Deps) http.Handler {
+      r := chi.NewRouter()
+      r.Use(middleware.Logger)
+      r.Use(middleware.Recoverer)
+
+      r.Get("/health", HealthHandler)
+      r.Get("/health/db", deps.HealthDB)
+
+      r.Route("/api", func(r chi.Router) {
+          r.Post("/auth/signup", deps.Signup)
+          r.Post("/auth/login", deps.Login)
+
+          // Authenticated routes
+          r.Group(func(r chi.Router) {
+              r.Use(deps.RequireAuth)
+              r.Get("/me", deps.Me)
+          })
+      })
+
+      return r
+  }
+
+Install chi: `go get github.com/go-chi/chi/v5`. Why chi: lightweight, idiomatic, handles route grouping and middleware better than net/http alone.
+
+backend/internal/auth/password.go — Wraps bcrypt for hashing/verifying passwords. Why a wrapper: keeps the bcrypt cost constant in one place and lets you swap to argon2 later if you want.
+
+  package auth
+
+  import "golang.org/x/crypto/bcrypt"
+
+  func HashPassword(plain string) (string, error) {
+      h, err := bcrypt.GenerateFromPassword([]byte(plain), 12)
+      return string(h), err
+  }
+
+  func CheckPassword(hash, plain string) bool {
+      return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain)) == nil
+  }
+
+backend/internal/auth/jwt.go — Issues and parses JWTs. Why JWT: stateless auth, no session table needed, easy frontend storage. Use github.com/golang-jwt/jwt/v5.
+
+Functions: Issue(userID string) (string, error) and Parse(token string) (userID string, err error).
+
+backend/internal/users/store.go — All DB queries about users. Why a separate "store" package: keeps SQL out of HTTP handlers. This is the *repository pattern* — recruiters know it, it's standard.
+
+  type Store struct { db *pgxpool.Pool }
+
+  func (s *Store) Create(ctx context.Context, email, username, hash string) (*User, error) { ... }
+  func (s *Store) ByEmail(ctx context.Context, email string) (*User, error) { ... }
+  func (s *Store) ByID(ctx context.Context, id string) (*User, error) { ... }
+
+backend/internal/users/service.go — Higher-level operations: Signup checks if email exists then calls store.Create with hashed password; Login fetches user, verifies password, issues JWT. Why a service layer above the store: business logic lives here, store is *just* SQL. Clean separation.
+
+backend/internal/api/auth.go — HTTP handlers: parse JSON, call service, return response. Thin layer.
+
+backend/internal/api/middleware.go — RequireAuth middleware. Reads Authorization: Bearer <token> header, parses JWT, puts user ID in request context. Subsequent handlers read it via ctx.Value("userID").
+
+Frontend file purposes:
+
+frontend/src/lib/store.ts — Zustand store with user, token, login(), logout(). Why Zustand over Redux: 5 lines of setup, no reducers, no providers. Token persisted to localStorage.
+
+  import { create } from 'zustand'
+  import { persist } from 'zustand/middleware'
+
+  interface AuthState {
+    token: string | null
+    user: { id: string; username: string } | null
+    setAuth: (token: string, user: any) => void
+    clear: () => void
+  }
+
+  export const useAuth = create<AuthState>()(
+    persist(
+      (set) => ({
+        token: null,
+        user: null,
+        setAuth: (token, user) => set({ token, user }),
+        clear: () => set({ token: null, user: null }),
+      }),
+      { name: 'codeforge-auth' }
+    )
+  )
+
+Install: `npm i zustand`.
+
+Update frontend/src/lib/api.ts to read the token from the store and add Authorization header automatically.
+
+frontend/src/pages/Signup.tsx and Login.tsx — Plain forms. Email, username (signup only), password. POST to backend, store result in Zustand, redirect to /dashboard (which doesn't exist yet — make it a placeholder).
+
+frontend/src/pages/Dashboard.tsx (placeholder) — Just shows "Logged in as {username}" + a logout button.
+
+Add React Router: `npm i react-router-dom`. Update App.tsx to define routes: /login, /signup, /dashboard. Why React Router: standard, recruiters know it, you'll need it for room URLs in Stage 5.
+
+Done when:
+- Sign up at /signup → redirected to /dashboard
+- Log out, log in at /login → back at /dashboard
+- Refresh page → still logged in (token persisted)
+- Hit /api/me from browser devtools with the token → see your user data
+
+
+================================================================
+STAGE 4 — Rooms & Files (CRUD, no editing yet)
+================================================================
+
+Goal: Logged-in users can create rooms, see them on a dashboard, open a room, and create/delete files inside it.
+Time: 3-4 days
+
+New files:
+
+  backend/internal/
+  ├── rooms/
+  │   ├── store.go
+  │   └── service.go
+  ├── files/
+  │   ├── store.go
+  │   └── service.go
+  └── api/
+      ├── rooms.go
+      └── files.go
+
+  frontend/src/
+  ├── pages/
+  │   ├── Dashboard.tsx       # UPDATE
+  │   └── Room.tsx            # NEW
+  └── components/
+      ├── CreateRoomModal.tsx
+      └── FileTree.tsx
+
+Why split rooms and files into separate packages:
+
+It looks like over-engineering for a small project but it pays off: when you add real-time editing in Stage 6, you'll be modifying file logic without touching room logic. Clear domain boundaries make changes safer. Recruiters notice clean structure in code reviews.
+
+Backend file purposes:
+
+rooms/store.go — Create, ByID, BySlug, ListByOwner, Delete. Slug generation: use a small library like goombaio/namegenerator or roll your own with crypto/rand for purple-fox-42-style URLs.
+
+rooms/service.go — CreateRoom(ownerID, name) validates name, generates slug, calls store. OpenRoom(slug, userID) checks ownership/public access.
+
+files/store.go — Create, ByRoom, Delete. The yjs_state column stays NULL for now.
+
+api/rooms.go — Handlers:
+- POST /api/rooms → create
+- GET /api/rooms → list mine
+- GET /api/rooms/:slug → get one (with files)
+- DELETE /api/rooms/:slug → delete
+
+api/files.go — POST /api/rooms/:slug/files and DELETE /api/rooms/:slug/files/:id.
+
+Frontend file purposes:
+
+Dashboard.tsx — Fetches /api/rooms, shows them as cards. "Create room" button opens a modal.
+
+Room.tsx — Routed at /r/:slug. Fetches the room + files. Shows file tree on the left, empty editor placeholder on the right ("Select a file"). Wired but not interactive yet.
+
+FileTree.tsx — Receives files as props, renders a list, has a "+" button to create a new file (asks for filename + language).
+
+Done when:
+- Click "Create room" → new room appears on dashboard
+- Click a room → routed to /r/<slug>, see file tree
+- Add a file → it appears in the tree
+- Delete a file → it disappears
+- Refresh — everything persists
+
+
+================================================================
+STAGE 5 — Monaco Editor (single-user, no realtime)
+================================================================
+
+Goal: Click a file in a room and edit its content in Monaco. Save on Cmd+S persists to the database. No collaboration yet.
+Time: 2-3 days
+
+New files:
+
+  frontend/src/
+  └── components/
+      ├── Editor.tsx          # Monaco wrapper
+      └── EditorToolbar.tsx   # Save button, language indicator
+
+Backend changes:
+
+Add a content field to files temporarily (or just reuse yjs_state as raw bytes for now — your choice). Add endpoints:
+
+- GET /api/rooms/:slug/files/:id/content → returns file content
+- PUT /api/rooms/:slug/files/:id/content → saves file content
+
+You'll *replace* this entire mechanism in Stage 6 with the Yjs sync flow. That's fine. Building the dumb version first means you understand what the realtime version is replacing.
+
+Frontend file purposes:
+
+Editor.tsx — Wraps @monaco-editor/react. Props: filePath, language, initialContent, onSave. Why a wrapper: keeps Monaco's complexity isolated from Room.tsx.
+
+  import Editor from '@monaco-editor/react'
+
+  export function CodeEditor({ language, value, onChange, onSave }: Props) {
+    return (
+      <Editor
+        height="100%"
+        language={language}
+        value={value}
+        onChange={(v) => onChange(v ?? '')}
+        onMount={(editor, monaco) => {
+          editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, onSave)
+        }}
+        theme="vs-dark"
+      />
+    )
+  }
+
+Install: `npm i @monaco-editor/react`.
+
+Update Room.tsx — When a file is selected, fetch its content and render <Editor>. Cmd+S calls the save endpoint.
+
+Done when:
+- Click a file → Monaco opens with content
+- Type → content updates
+- Cmd+S → saved to DB
+- Refresh → content persists
+- Switch files → no content bleed between files
+
+
+================================================================
+STAGE 6 — Real-Time Sync with Yjs (the magic moment)
+================================================================
+
+Goal: Open the same room in two browser tabs. Type in one. See edits in the other in real time.
+Time: 5-7 days. This is the hardest stage. Budget extra time.
+
+The architectural decision: Go vs Node sidecar for Yjs
+
+Yjs is a JavaScript library. The official server is a tiny Node process running y-websocket. Two options:
+
+Option A — Go-only: Use github.com/coder/yjs or similar Go ports of Yjs. Possible but the libraries are less mature and you'll fight binary compatibility issues.
+
+Option B — Go + Node sidecar: Run a small Node process that handles Yjs WebSocket connections. Your Go backend talks to it via internal HTTP/Redis.
+
+Pick Option B for now. It's the path of least resistance and totally legitimate. You can rewrite to pure Go in Stage 12 as a stretch goal — and that rewrite makes a great blog post.
+
+Wait — doesn't this mean I'm not building it "in Go"?
+No. The Go backend still does auth, room CRUD, file CRUD, code execution, and orchestration. The Node sidecar is one small file (~80 lines) that exists purely because Yjs is a JS library. This is the same pattern real companies use (they call them "polyglot services"). Document this in your README and you'll get bonus points in interviews for *recognizing the tradeoff*.
+
+New files:
+
+  backend/internal/
+  ├── ws/
+  │   └── proxy.go            # Forwards WebSocket connections to the Yjs sidecar
+
+  yjs-sidecar/                # NEW top-level directory
+  ├── package.json
+  ├── server.js               # ~80 line Node + y-websocket server
+  └── Dockerfile
+
+  frontend/src/
+  ├── hooks/
+  │   └── useYjsRoom.ts       # Manages Y.Doc + provider lifecycle
+  └── components/
+      └── Editor.tsx          # UPDATED — bind Yjs to Monaco
+
+File purposes:
+
+yjs-sidecar/server.js — A tiny Node WebSocket server using y-websocket's utility functions. It accepts connections at /yjs/:roomSlug and handles all the Yjs sync protocol for you. It also persists doc state to disk (or you can have it POST snapshots to the Go backend periodically).
+
+  const WebSocket = require('ws')
+  const http = require('http')
+  const { setupWSConnection } = require('y-websocket/bin/utils')
+
+  const server = http.createServer()
+  const wss = new WebSocket.Server({ server })
+
+  wss.on('connection', (conn, req) => {
+    const docName = req.url.slice(1) // strip leading /
+    setupWSConnection(conn, req, { docName })
+  })
+
+  server.listen(1234)
+
+That's the entire sidecar. Install: `cd yjs-sidecar && npm init -y && npm i ws y-websocket yjs`.
+
+backend/internal/ws/proxy.go — Optional but recommended: instead of exposing the sidecar directly, have your Go backend proxy WebSocket connections to it. This lets you authenticate the connection (check JWT) before forwarding. Alternatively for v1 just expose port 1234 in dev and tighten in Stage 11.
+
+frontend/src/hooks/useYjsRoom.ts — A custom hook that:
+1. Creates a Y.Doc for the file
+2. Connects a WebsocketProvider from y-websocket to the sidecar
+3. Returns the doc + an awareness object
+4. Cleans up on unmount
+
+  import { useEffect, useState } from 'react'
+  import * as Y from 'yjs'
+  import { WebsocketProvider } from 'y-websocket'
+
+  export function useYjsRoom(roomSlug: string, fileId: string) {
+    const [doc] = useState(() => new Y.Doc())
+    const [provider, setProvider] = useState<WebsocketProvider | null>(null)
+
+    useEffect(() => {
+      const p = new WebsocketProvider(
+        'ws://localhost:1234',
+        `${roomSlug}-${fileId}`,
+        doc
+      )
+      setProvider(p)
+      return () => { p.destroy(); doc.destroy() }
+    }, [roomSlug, fileId])
+
+    return { doc, provider }
+  }
+
+Install: `npm i yjs y-websocket y-monaco`.
+
+Update Editor.tsx — Instead of controlled value/onChange, use MonacoBinding from y-monaco to bind the Monaco model to a Y.Text on the doc.
+
+  import { useEffect, useRef } from 'react'
+  import Editor, { OnMount } from '@monaco-editor/react'
+  import { MonacoBinding } from 'y-monaco'
+  import * as Y from 'yjs'
+
+  export function CodeEditor({ doc, awareness, language }: Props) {
+    const bindingRef = useRef<MonacoBinding | null>(null)
+
+    const handleMount: OnMount = (editor, monaco) => {
+      const yText = doc.getText('content')
+      bindingRef.current = new MonacoBinding(yText, editor.getModel()!, new Set([editor]), awareness)
+    }
+
+    return <Editor language={language} onMount={handleMount} theme="vs-dark" height="100%" />
+  }
+
+The bug you will hit:
+
+When you reconnect after a network blip, you might see *duplicated* content. This is because creating a new Y.Doc and re-syncing produces a different convergence than reusing the same one. Fix: keep the Y.Doc alive across reconnects (which the hook above does — useState(() => new Y.Doc()) runs once per component lifetime).
+
+Done when:
+- Open a room file in two browser tabs
+- Type in tab 1 → tab 2 updates within ~50ms
+- Type in tab 2 → tab 1 updates
+- Close both tabs, reopen one — content is still there (sidecar persists)
+- Take a screen recording of this. Tweet it. Tell your friends. This is the moment.
+
+
+================================================================
+STAGE 7 — Persistence to Postgres
+================================================================
+
+Goal: The Yjs sidecar's in-memory state gets snapshotted to Postgres so it survives sidecar restarts.
+Time: 2 days
+
+New files:
+
+  yjs-sidecar/
+  └── persistence.js          # Save/load Yjs state to Postgres via Go API
+
+Approach:
+
+The sidecar gets a callback hook (y-websocket exposes one) that fires every N seconds with the latest doc state as a Uint8Array. POST this to a new Go endpoint:
+
+POST /internal/files/:id/yjs-state (body: raw bytes)
+
+The Go endpoint writes it to files.yjs_state. On sidecar startup or first connection to a room, it loads the previous state from Go via:
+
+GET /internal/files/:id/yjs-state
+
+"Internal" endpoints are routed under /internal/* and protected by a shared secret (X-Internal-Key header). Why: separates public API from sidecar↔backend traffic. Standard pattern.
+
+Done when:
+- Edit a file, wait 10 seconds
+- `docker restart yjs-sidecar`
+- Reload the room — your edits are still there
+
+
+================================================================
+STAGE 8 — The Sandbox (the second hardest stage, and the most resume-relevant)
+================================================================
+
+Goal: Click "Run" → user's Python code runs in a Docker sandbox → stdout streams back to the browser.
+Time: 5-7 days
+
+New files:
+
+  backend/internal/
+  ├── sandbox/
+  │   ├── runner.go           # Core: starts a container, runs code, returns output
+  │   ├── pool.go             # Pre-warmed container pool (added in Stage 8b)
+  │   └── seccomp.json        # Custom seccomp profile
+  └── api/
+      └── exec.go             # POST /api/rooms/:slug/run → executionID, then stream via WS
+
+  sandbox/
+  ├── python.Dockerfile       # The runner image
+  └── entrypoint.sh
+
+Stage 8a — Naive single-shot execution (3 days)
+
+sandbox/python.Dockerfile — Builds the Python runner image. Slim base, non-root user, pre-installed common deps, no pip at runtime.
+
+  FROM python:3.12-slim
+  RUN useradd -m -u 1000 -s /bin/bash runner && \
+      pip install --no-cache-dir numpy requests && \
+      rm -rf /root/.cache /var/lib/apt/lists/*
+  USER runner
+  WORKDIR /home/runner
+  COPY --chown=runner:runner entrypoint.sh /home/runner/entrypoint.sh
+  RUN chmod +x /home/runner/entrypoint.sh
+  ENTRYPOINT ["/home/runner/entrypoint.sh"]
+
+sandbox/entrypoint.sh — Reads code from stdin, writes to /tmp/code.py, execs it.
+
+  #!/bin/bash
+  set -e
+  cat > /tmp/code.py
+  exec python3 /tmp/code.py
+
+Build: `docker build -t codeforge-runner-python sandbox/`
+
+backend/internal/sandbox/runner.go — The core. Uses the Docker SDK (github.com/docker/docker/client) to:
+1. Create a container with hardened flags
+2. Start it
+3. Attach to its stdin/stdout/stderr
+4. Write the user's code to stdin, close stdin
+5. Stream stdout/stderr back through Go channels
+6. Wait for exit, return result
+
+Use context.WithTimeout(ctx, 5*time.Second) to kill runaway code.
+
+Hardened Docker run flags (every flag is interview-talkable, memorize them):
+
+  --rm                                      Remove container after exit
+  --network none                            No network at all
+  --read-only                               Read-only root filesystem
+  --tmpfs /tmp:size=64m,mode=1777           Writable /tmp, size-limited
+  --memory 128m                             Hard memory limit
+  --memory-swap 128m                        No swap
+  --cpus 0.5                                Half a CPU core
+  --pids-limit 64                           Prevent fork bombs
+  --ulimit nofile=64:64                     File descriptor limit
+  --ulimit nproc=32:32                      Process limit
+  --cap-drop ALL                            Drop all Linux capabilities
+  --security-opt no-new-privileges          Can't gain privileges
+  --security-opt seccomp=./seccomp.json     Custom syscall filter
+  --user 1000:1000                          Non-root user
+
+The full implementation is ~150 lines of Go. The first time you write Docker SDK code in Go you will hate the API — it's verbose and the types are confusing. Push through. Once it works, refactor.
+
+backend/internal/api/exec.go — Two parts:
+1. POST /api/rooms/:slug/run — accepts {fileId, language}, returns {executionId}
+2. GET /ws/exec/:executionId — WebSocket that streams stdout back
+
+The handler kicks off runner.Run in a goroutine, the WebSocket reads from a channel that the runner pushes to.
+
+Frontend update: add a "Run" button to the editor toolbar. On click, POST to /api/rooms/:slug/run, then open the WS to stream output into an output panel below the editor.
+
+Test the sandbox immediately with hostile code (do this yourself, in a dev container):
+
+  # Memory bomb — should hit 128MB limit
+  x = []
+  while True: x.append("a" * 10_000_000)
+
+  # Fork bomb — should hit pids-limit
+  import os
+  while True: os.fork()
+
+  # Network — should fail (no network namespace)
+  import socket
+  socket.socket().connect(("example.com", 80))
+
+  # Filesystem — should fail (read-only root)
+  open("/etc/test", "w").write("hi")
+
+All four must fail safely. Record the terminal output of all four failing. Put it in your README. This is interview gold.
+
+Stage 8b — Pre-warmed container pool (3 days)
+
+backend/internal/sandbox/pool.go — Maintains N idle containers per language, ready to receive code over stdin. On request, pop one, use it, destroy it, refill in background.
+
+Measure latency before and after. Cold start is typically 400-800ms. Pooled is typically 50-150ms. Record these numbers and put them in your README. They're the single most quotable performance number you'll have.
+
+Done when:
+- Type Python in a file, click Run, see output
+- Output streams progressively (try `import time; for i in range(5): print(i); time.sleep(1)`)
+- All four hostile tests fail safely
+- Pooled latency under 150ms (measure with logging)
+
+
+================================================================
+STAGE 9 — Cursor Presence + Polish
+================================================================
+
+Goal: See other users' cursors with names. Add file tree polish, language switcher, share button.
+Time: 3-4 days
+
+New files:
+
+  frontend/src/components/
+  ├── PresenceList.tsx
+  ├── ShareModal.tsx
+  └── LanguageSwitcher.tsx
+
+Yjs has built-in awareness for cursors — MonacoBinding already handles displaying remote cursors if you pass an awareness object. You just need to give each user a name + color and set it on provider.awareness.setLocalStateField('user', { name, color }).
+
+PresenceList.tsx — Reads from awareness, shows avatar bubbles for active users. Listens to provider.awareness.on('change', ...).
+
+ShareModal.tsx — Just shows the room URL with a copy button. No backend changes if rooms are public; if private, add a "make public" toggle.
+
+LanguageSwitcher.tsx — Updates files.language on the backend, swaps Monaco's syntax highlighting.
+
+Polish pass:
+- Dark mode (Tailwind dark: classes everywhere)
+- Empty states ("No files yet — create one")
+- Loading spinners
+- Error toasts
+- Keyboard shortcuts (Cmd+B for file tree, Cmd+Enter to run)
+
+Done when:
+- Two users in the same room see each other's cursors moving
+- The app feels professional, not janky
+
+
+================================================================
+STAGE 10 — Deployment
+================================================================
+
+Goal: codeforge.dev resolves to a working CodeForge instance.
+Time: 3-4 days
+
+New files:
+
+  infra/
+  ├── Caddyfile
+  ├── docker-compose.prod.yml
+  └── deploy.sh
+
+  .github/
+  └── workflows/
+      └── deploy.yml
+
+Stack on a single Hetzner VPS (or Fly.io):
+
+- Caddy (auto-HTTPS, reverse proxy)
+- Go backend (Docker container)
+- Yjs sidecar (Docker container)
+- Postgres (Docker container or managed)
+- Redis (Docker container)
+- Sandbox runner image (built, pulled by Go backend)
+
+infra/Caddyfile — Routes codeforge.dev to the frontend (served as static files), api.codeforge.dev to the Go backend, ws.codeforge.dev to the sidecar. Or use path-based routing on a single domain.
+
+  codeforge.dev {
+      root * /srv/frontend
+      file_server
+      handle /api/* {
+          reverse_proxy backend:8080
+      }
+      handle /ws/* {
+          reverse_proxy yjs-sidecar:1234
+      }
+  }
+
+docker-compose.prod.yml — Production version: no exposed Postgres ports, env vars via .env, restart policies, volumes for data persistence.
+
+.github/workflows/deploy.yml — On push to main: build images, push to GHCR, SSH to the VPS, `docker compose pull && docker compose up -d`.
+
+Buy codeforge.dev (or any name you like) on Porkbun. Point DNS to your VPS IP. Caddy handles TLS automatically.
+
+Done when:
+- https://codeforge.dev loads in your browser, no cert warnings
+- You can sign up, create a room, edit, run code, all in production
+- Send the link to one friend. Have them try it.
+
+
+================================================================
+STAGE 11 — Hardening
+================================================================
+
+Goal: The site doesn't fall over when one user is hostile or stressed.
+Time: 3-4 days
+
+Tasks:
+- Rate limiting — Redis-backed, max 10 runs/minute per user, max 60 API calls/minute per IP
+- Input validation — every request body validated; reject oversize files (>1MB code), suspicious filenames
+- CORS — locked down to your frontend origin only
+- Security headers — CSP, X-Frame-Options, etc. via Caddy
+- JWT secret rotation plan — document it, even if you don't implement it
+- Internal endpoints — sidecar↔backend traffic gated by shared secret
+- Sandbox audit — re-run all hostile tests in production
+- Backup script — daily pg_dump to a separate volume
+- Basic monitoring — /metrics endpoint with Prometheus format, even if you don't run Grafana yet
+
+Done when: You can hand the URL to a stranger and not feel nervous.
+
+
+================================================================
+STAGE 12 — Polish, README, Launch
+================================================================
+
+Goal: Ship publicly. Get the project from "works" to "memorable."
+Time: 4-5 days
+
+Tasks:
+- Landing page — hero with live demo GIF, "Try a demo room" button (no signup), feature list, screenshots
+- README — tagline, GIF, demo link, architecture diagram, the "How the sandbox works" section, performance numbers, tech stack, local dev, deployment, license
+- Blog post — "How I built a code execution sandbox in Docker" — go deep on the threat model, Docker flags, seccomp profile, the pool, the bug you hit. Publish on your own domain.
+- Demo room seed — one room with example code that anyone can join without signup
+- Show HN post — Hacker News, r/programming, your university Discord, infosec Twitter
+- Add to your resume + portfolio site with the bullets from the spec
+
+Done when:
+- Public URL works for anyone
+- README is something you're proud of
+- Blog post is published
+- You've shared the link in at least 3 places
+
+
+================================================================
+Stretch Stages (only if you finish early)
+================================================================
+
+Stage 13 — Rewrite the Yjs sidecar in pure Go using a Go CRDT library. This is a great blog post: "Replacing my Node sidecar with Go CRDTs."
+Stage 14 — GitHub OAuth — one-click signup
+Stage 15 — Multi-language sandboxes — add JavaScript, Go, Rust runners
+Stage 16 — Embeddable widget — <iframe> your editor into any blog
+Stage 17 — Save & fork rooms — Gist-like behavior
+
+
+================================================================
+How to Use This Document
+================================================================
+
+1. Read the whole thing once now so you understand where each stage leads.
+2. Print or pin the stage list. Cross stages off as you finish them.
+3. Don't start a stage until the previous one's "Done when" is true. Skipping causes compounding bugs.
+4. If a stage takes 2× the estimated time, that's normal. If it takes 4×, ask for help on Stack Overflow or Discord — don't grind alone for a week.
+5. Take a screen recording at the end of each stage. You'll forget how exciting these moments were, and the recordings double as portfolio material.
+6. Commit and push at least once per stage. Public GitHub history is part of the portfolio.
+
+
+================================================================
+Quick Sanity Math
+================================================================
+
+Stage 0 (Go learning): 4-6 days
+Stage 1: 2-3 days
+Stage 2: 2 days
+Stage 3: 3-4 days
+Stage 4: 3-4 days
+Stage 5: 2-3 days
+Stage 6: 5-7 days  ← hardest
+Stage 7: 2 days
+Stage 8: 5-7 days  ← second hardest, most resume value
+Stage 9: 3-4 days
+Stage 10: 3-4 days
+Stage 11: 3-4 days
+Stage 12: 4-5 days
+
+Total: ~41-55 days of focused work. At ~3 hours/day part-time around uni, that's 10-14 weeks. Matches the 12-week target.
+
+Start Stage 0 tomorrow morning. The Tour of Go takes 3 hours. By Friday you'll know enough Go to begin Stage 1 next Monday. By the end of the semester, CodeForge is live.
+
+You've got this.
