@@ -1,0 +1,22 @@
+  # Go
+  *.exe
+  *.dll
+  *.so
+  *.dylib
+  /backend/vendor/
+
+  # Node
+  node_modules/
+  dist/
+
+  # IDE
+  .vscode/
+  .idea/
+
+  # Env
+  .env
+  .env.local
+
+  # OS
+  .DS_Store
+  Thumbs.db
