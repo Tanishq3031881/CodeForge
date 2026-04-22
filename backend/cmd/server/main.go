@@ -4,10 +4,13 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Tanishq3031881/CodeForge/backend/internal/api"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/auth"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/config"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/db"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/users"
 )
 
 func main() {
@@ -19,12 +22,21 @@ func main() {
 	}
 	defer pool.Close()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", api.HealthHandler)
-	mux.HandleFunc("/health/db", api.HealthDBHandler(pool))
+	issuer := auth.NewIssuer(cfg.JWTSecret, 24*time.Hour)
+	store := users.NewStore(pool)
+	service := users.NewService(store, issuer)
+
+	deps := &api.Deps{
+		Pool:   pool,
+		Users:  service,
+		Store:  store,
+		Issuer: issuer,
+	}
+
+	router := api.NewRouter(deps)
 
 	log.Printf("listening on port %s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, mux); err != nil {
+	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
 		log.Fatal(err)
 	}
 }
