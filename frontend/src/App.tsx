@@ -1,20 +1,31 @@
-import { useEffect, useState } from 'react'
-import { api } from './lib/api'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Login } from './pages/Login'
+import { Signup } from './pages/Signup'
+import { Dashboard } from './pages/Dashboard'
+import { useAuth } from './lib/store'
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const token = useAuth((s) => s.token)
+  return token ? <>{children}</> : <Navigate to="/login" replace />
+}
 
 function App() {
-  const [status, setStatus] = useState<string>('loading...')
-
-  useEffect(() => {
-    api<{ status: string }>('/health')
-      .then((data) => setStatus(data.status))
-      .catch(() => setStatus('error'))
-  }, [])
-
   return (
-    <div style={{ padding: '2rem', fontFamily: 'monospace' }}>
-      <h1>CodeForge</h1>
-      <p>Backend says: {status}</p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route
+          path="/dashboard"
+          element={
+            <RequireAuth>
+              <Dashboard />
+            </RequireAuth>
+          }
+        />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
