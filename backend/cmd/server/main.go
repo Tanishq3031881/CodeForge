@@ -10,6 +10,8 @@ import (
 	"github.com/Tanishq3031881/CodeForge/backend/internal/auth"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/config"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/db"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/files"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/rooms"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/users"
 )
 
@@ -23,13 +25,19 @@ func main() {
 	defer pool.Close()
 
 	issuer := auth.NewIssuer(cfg.JWTSecret, 24*time.Hour)
-	store := users.NewStore(pool)
-	service := users.NewService(store, issuer)
+
+	userStore := users.NewStore(pool)
+	userService := users.NewService(userStore, issuer)
+
+	roomService := rooms.NewService(rooms.NewStore(pool))
+	fileService := files.NewService(files.NewStore(pool), roomService)
 
 	deps := &api.Deps{
 		Pool:   pool,
-		Users:  service,
-		Store:  store,
+		Users:  userService,
+		Store:  userStore,
+		Rooms:  roomService,
+		Files:  fileService,
 		Issuer: issuer,
 	}
 

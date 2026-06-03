@@ -22,6 +22,16 @@ func NewRouter(d *Deps) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(d.RequireAuth)
 			r.Get("/me", d.Me)
+
+			r.Post("/rooms", d.CreateRoom)
+			r.Get("/rooms", d.ListRooms)
+			r.Get("/rooms/{slug}", d.GetRoom)
+			r.Delete("/rooms/{slug}", d.DeleteRoom)
+
+			r.Post("/rooms/{slug}/files", d.CreateFile)
+			r.Delete("/rooms/{slug}/files/{id}", d.DeleteFile)
+			r.Get("/rooms/{slug}/files/{id}/content", d.GetFileContent)
+			r.Put("/rooms/{slug}/files/{id}/content", d.SaveFileContent)
 		})
 	})
 
