@@ -12,6 +12,7 @@ import (
 	"github.com/Tanishq3031881/CodeForge/backend/internal/db"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/files"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/rooms"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/sandbox"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/users"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/ws"
 )
@@ -38,6 +39,21 @@ func main() {
 		log.Fatalf("yjs proxy: %v", err)
 	}
 
+	// Code execution is optional: if Docker isn't reachable the server still
+	// runs, and the run endpoints return 503.
+	var sandboxPool *sandbox.Pool
+	runner, err := sandbox.NewRunner(sandbox.Config{
+		Image:   cfg.SandboxImage,
+		Timeout: cfg.SandboxTimeout,
+	})
+	if err != nil {
+		log.Printf("sandbox disabled (Docker unavailable): %v", err)
+	} else {
+		sandboxPool = sandbox.NewPool(runner, cfg.SandboxPoolSize)
+		defer sandboxPool.Close()
+		log.Printf("sandbox enabled: image=%s pool=%d", cfg.SandboxImage, cfg.SandboxPoolSize)
+	}
+
 	deps := &api.Deps{
 		Pool:        pool,
 		Users:       userService,
@@ -47,6 +63,8 @@ func main() {
 		Issuer:      issuer,
 		Yjs:         yjsProxy,
 		InternalKey: cfg.InternalKey,
+		Sandbox:     sandboxPool,
+		Exec:        api.NewExecRegistry(),
 	}
 
 	router := api.NewRouter(deps)

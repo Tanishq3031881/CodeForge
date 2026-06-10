@@ -5,6 +5,9 @@ interface Props {
   language: string
   status: SyncStatus
   canEdit: boolean
+  canRun: boolean
+  running: boolean
+  onRun: () => void
 }
 
 const statusLabel: Record<SyncStatus, { text: string; color: string }> = {
@@ -13,7 +16,7 @@ const statusLabel: Record<SyncStatus, { text: string; color: string }> = {
   disconnected: { text: '● offline', color: 'salmon' },
 }
 
-export function EditorToolbar({ path, language, status, canEdit }: Props) {
+export function EditorToolbar({ path, language, status, canEdit, canRun, running, onRun }: Props) {
   const s = statusLabel[status]
   return (
     <div style={bar}>
@@ -26,9 +29,27 @@ export function EditorToolbar({ path, language, status, canEdit }: Props) {
         <span title="Realtime sync status" style={{ color: s.color, fontSize: 12 }}>
           {s.text}
         </span>
+        <button
+          onClick={onRun}
+          disabled={!canRun || running}
+          title={canRun ? 'Run (Ctrl/Cmd+Enter)' : 'Only Python files can be run'}
+          style={runBtn}
+        >
+          {running ? 'Running…' : '▶ Run'}
+        </button>
       </div>
     </div>
   )
+}
+
+const runBtn: React.CSSProperties = {
+  background: '#2ea043',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 4,
+  padding: '3px 10px',
+  fontSize: 12,
+  cursor: 'pointer',
 }
 
 const bar: React.CSSProperties = {

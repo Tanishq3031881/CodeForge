@@ -46,8 +46,14 @@ func NewRouter(d *Deps) http.Handler {
 			r.Delete("/rooms/{slug}/files/{id}", d.DeleteFile)
 			r.Get("/rooms/{slug}/files/{id}/content", d.GetFileContent)
 			r.Put("/rooms/{slug}/files/{id}/content", d.SaveFileContent)
+
+			r.Post("/rooms/{slug}/run", d.Run)
 		})
 	})
+
+	// Execution output stream. Like the Yjs WS, the JWT arrives as a query
+	// param, so this sits outside the RequireAuth group and authenticates itself.
+	r.Get("/ws/exec/{id}", d.RunStream)
 
 	return r
 }

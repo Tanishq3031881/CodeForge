@@ -4,6 +4,7 @@ import (
 	"github.com/Tanishq3031881/CodeForge/backend/internal/auth"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/files"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/rooms"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/sandbox"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/users"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,4 +20,8 @@ type Deps struct {
 	Yjs    *ws.Proxy
 	// InternalKey is the shared secret the Yjs sidecar presents on /internal/*.
 	InternalKey string
+	// Sandbox runs user code; nil if Docker is unavailable (feature disabled).
+	Sandbox *sandbox.Pool
+	// Exec holds pending executions between the run POST and the WS connect.
+	Exec *execRegistry
 }

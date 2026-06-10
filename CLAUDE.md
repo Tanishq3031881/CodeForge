@@ -64,7 +64,23 @@ docker-compose.yml, Makefile
       (constant-time compare; 401 without it). Sidecar `persistence.js` loads on
       first connect, debounced save (PERSIST_DEBOUNCE_MS) + final save on close;
       stores yjs_state (base64) + decoded text into `files.content`.
-- [ ] Stage 8 — Docker sandbox execution (most resume value)
+- [x] **Stage 8** — Docker sandbox execution. DONE, verified 8/8 end-to-end
+      (incl. through the Vite proxy, the browser path). `sandbox/python.Dockerfile`
+      + `entrypoint.sh` (reads stdin → /tmp/code.py → exec). `internal/sandbox/`:
+      `runner.go` (Docker SDK, hardened flags), `pool.go` (pre-warmed pool),
+      embedded `seccomp.json` (default-deny allowlist). `api/exec.go`:
+      `POST /api/rooms/{slug}/run` → execution_id, `GET /ws/exec/{id}?token`
+      streams stdout/stderr/exit (coder/websocket). Frontend: Run button +
+      Ctrl/Cmd+Enter + `OutputPanel`. Vite now proxies `/ws/*` (ws:true).
+      Hardening: --network none, --read-only + tmpfs, --memory/--memory-swap
+      128m, --cpus 0.5, --pids-limit 64, --cap-drop ALL, --no-new-privileges,
+      seccomp, --user 1000, 5s wall-clock. Dropped `--ulimit nproc` (host-wide
+      per-UID → EAGAIN; pids-limit is the container-scoped control).
+      VERIFIED hostile: memory bomb→OOM 137; fork bomb→EAGAIN (pids-limit);
+      network→name-resolution fail (no netns); fs→read-only error; infinite
+      loop→timeout kill. Pooled time-to-first-byte ~15-25ms (target <150ms).
+      Deps: docker SDK v27.5.1 (go-connections pinned to v0.5.0 via `replace`
+      for Windows npipe), coder/websocket. ⚠️ Awaiting user's manual commit.
 - [ ] Stage 9 — Cursor presence + polish
 - [ ] Stage 10 — Deployment
 - [ ] Stage 11 — Hardening

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/store'
 import { createFile, deleteFile, getFileContent, getRoom } from '../lib/rooms'
@@ -6,7 +6,9 @@ import type { FileMeta, Room as RoomType } from '../lib/types'
 import { FileTree } from '../components/FileTree'
 import { CollaborativeEditor } from '../components/CollaborativeEditor'
 import { EditorToolbar } from '../components/EditorToolbar'
+import { OutputPanel, type OutputChunk, type ExecState } from '../components/OutputPanel'
 import { useYjsRoom } from '../hooks/useYjsRoom'
+import { runCode } from '../lib/exec'
 
 export function Room() {
   const { slug = '' } = useParams()
@@ -91,6 +93,12 @@ function EditorPane({ slug, file, canEdit }: { slug: string; file: FileMeta; can
   const { doc, provider, status } = useYjsRoom(slug, file.id)
   const [initialContent, setInitialContent] = useState<string | null>(null)
 
+  // Execution state.
+  const [chunks, setChunks] = useState<OutputChunk[]>([])
+  const [execState, setExecState] = useState<ExecState>({ kind: 'idle' })
+  const wsRef = useRef<WebSocket | null>(null)
+  const canRun = file.language === 'python'
+
   useEffect(() => {
     let alive = true
     getFileContent(slug, file.id)
@@ -101,13 +109,38 @@ function EditorPane({ slug, file, canEdit }: { slug: string; file: FileMeta; can
     }
   }, [slug, file.id])
 
+  // Tear down any live execution socket when switching files / unmounting.
+  useEffect(() => () => wsRef.current?.close(), [])
+
+  async function handleRun() {
+    if (!canRun || execState.kind === 'running') return
+    const code = doc.getText('content').toString()
+    setChunks([])
+    setExecState({ kind: 'running' })
+    wsRef.current = await runCode(slug, file.id, code, {
+      onOutput: (stream, data) => setChunks((cs) => [...cs, { stream, data }]),
+      onExit: (codeNum, timedOut) => setExecState({ kind: 'exited', code: codeNum, timedOut }),
+      onError: (message) => setExecState({ kind: 'error', message }),
+    })
+  }
+
   // Wait for the saved content to load before mounting the binding, so the
   // seed-if-empty check sees the real starting text.
   if (initialContent === null) return <Placeholder>Loading {file.path}…</Placeholder>
 
+  const running = execState.kind === 'running'
+
   return (
     <>
-      <EditorToolbar path={file.path} language={file.language} status={status} canEdit={canEdit} />
+      <EditorToolbar
+        path={file.path}
+        language={file.language}
+        status={status}
+        canEdit={canEdit}
+        canRun={canRun}
+        running={running}
+        onRun={handleRun}
+      />
       <div style={{ flex: 1, minHeight: 0 }}>
         <CollaborativeEditor
           doc={doc}
@@ -115,8 +148,10 @@ function EditorPane({ slug, file, canEdit }: { slug: string; file: FileMeta; can
           language={file.language}
           readOnly={!canEdit}
           initialContent={initialContent}
+          onRun={handleRun}
         />
       </div>
+      <OutputPanel chunks={chunks} state={execState} onClear={() => { setChunks([]); setExecState({ kind: 'idle' }) }} />
     </>
   )
 }

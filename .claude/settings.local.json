@@ -34,7 +34,14 @@
       "Bash(node test-persist.mjs setup)",
       "PowerShell($p = \\(Get-NetTCPConnection -LocalPort 1234 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess; if \\($p\\) { Stop-Process -Id $p -Force; \"killed sidecar PID $p\" } else { \"nothing on 1234\" })",
       "Bash(node test-persist.mjs reload)",
-      "Bash(git commit -q -m 'Stage 7: persist Yjs state to Postgres via shared-secret internal API *)"
+      "Bash(git commit -q -m 'Stage 7: persist Yjs state to Postgres via shared-secret internal API *)",
+      "Bash(docker build *)",
+      "Bash(echo \"VET_EXIT=$?\")",
+      "PowerShell($p = \\(Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess; if \\($p\\) { Stop-Process -Id $p -Force; \"killed backend PID $p\" } else { \"nothing on 8080\" })",
+      "Bash(JWT_SECRET=dev-insecure-change-me INTERNAL_KEY=dev-internal-key SANDBOX_POOL_SIZE=3 /tmp/cf-server.exe *)",
+      "Bash(node test-exec.mjs)",
+      "Bash(grep -vE \"rolldown|chunk|dynamic import|codeSplitting|adjust|^\\\\s*$\")",
+      "Bash(gofmt -w ./internal/config/config.go ./internal/sandbox/runner.go)"
     ]
   }
 }
