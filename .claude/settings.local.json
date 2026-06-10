@@ -20,7 +20,12 @@
       "Bash(npm --version)",
       "Bash(docker version *)",
       "Bash(git add *)",
-      "Bash(git commit -m 'Stage 3-5 frontend: rooms dashboard, Room page, file tree, Monaco editor *)"
+      "Bash(git commit -m 'Stage 3-5 frontend: rooms dashboard, Room page, file tree, Monaco editor *)",
+      "Bash(PORT=1234 HOST=127.0.0.1 node server.js)",
+      "Bash(JWT_SECRET=dev-insecure-change-me go run *)",
+      "Bash(node test-sync.mjs)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(node --input-type=module -e ' *)"
     ]
   }
 }

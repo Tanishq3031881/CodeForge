@@ -5,6 +5,7 @@ import (
 	"github.com/Tanishq3031881/CodeForge/backend/internal/files"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/rooms"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/users"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,4 +16,5 @@ type Deps struct {
 	Rooms  *rooms.Service
 	Files  *files.Service
 	Issuer *auth.Issuer
+	Yjs    *ws.Proxy
 }

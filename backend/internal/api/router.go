@@ -15,6 +15,13 @@ func NewRouter(d *Deps) http.Handler {
 	r.Get("/health", HealthHandler)
 	r.Get("/health/db", HealthDBHandler(d.Pool))
 
+	// WebSocket entry point for Yjs sync. Lives outside /api because the JWT
+	// arrives as a query param (browsers can't set WS headers), so the normal
+	// RequireAuth middleware doesn't apply — YjsWS authenticates itself. The
+	// doc name is the file ID; the room slug rides along as a query param so we
+	// keep a single, slash-free path segment (avoids WS roomname URL-encoding).
+	r.Get("/ws/yjs/{id}", d.YjsWS)
+
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/auth/signup", d.Signup)
 		r.Post("/auth/login", d.Login)

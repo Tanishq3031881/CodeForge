@@ -1,0 +1,15 @@
+{
+  "name": "codeforge-yjs-sidecar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Yjs WebSocket sync server for CodeForge. Exists because Yjs is a JS library; all auth happens in the Go backend, which proxies connections here.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "y-websocket": "^1.5.4",
+    "yjs": "^13.6.20"
+  }
+}

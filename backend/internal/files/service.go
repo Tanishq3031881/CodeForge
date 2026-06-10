@@ -80,20 +80,31 @@ func (s *Service) DeleteFile(ctx context.Context, slug, userID, fileID string) e
 	return s.store.Delete(ctx, fileID)
 }
 
-// GetContent returns a file's text content if the user can view the room.
-func (s *Service) GetContent(ctx context.Context, slug, userID, fileID string) (string, error) {
+// RequireViewable returns the file if the user may view the room it belongs
+// to (owner or public room). It verifies the file actually lives in that room
+// so a file ID can't be reached through someone else's room slug.
+func (s *Service) RequireViewable(ctx context.Context, slug, userID, fileID string) (*File, error) {
 	room, err := s.rooms.OpenRoom(ctx, slug, userID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	f, err := s.store.ByID(ctx, fileID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if f.RoomID != room.ID {
-		return "", ErrNotFound
+		return nil, ErrNotFound
 	}
-	return s.store.GetContent(ctx, fileID)
+	return f, nil
+}
+
+// GetContent returns a file's text content if the user can view the room.
+func (s *Service) GetContent(ctx context.Context, slug, userID, fileID string) (string, error) {
+	f, err := s.RequireViewable(ctx, slug, userID, fileID)
+	if err != nil {
+		return "", err
+	}
+	return s.store.GetContent(ctx, f.ID)
 }
 
 // SaveContent persists file content. Only the room owner may write.

@@ -13,6 +13,7 @@ import (
 	"github.com/Tanishq3031881/CodeForge/backend/internal/files"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/rooms"
 	"github.com/Tanishq3031881/CodeForge/backend/internal/users"
+	"github.com/Tanishq3031881/CodeForge/backend/internal/ws"
 )
 
 func main() {
@@ -32,6 +33,11 @@ func main() {
 	roomService := rooms.NewService(rooms.NewStore(pool))
 	fileService := files.NewService(files.NewStore(pool), roomService)
 
+	yjsProxy, err := ws.NewProxy(cfg.YjsURL)
+	if err != nil {
+		log.Fatalf("yjs proxy: %v", err)
+	}
+
 	deps := &api.Deps{
 		Pool:   pool,
 		Users:  userService,
@@ -39,6 +45,7 @@ func main() {
 		Rooms:  roomService,
 		Files:  fileService,
 		Issuer: issuer,
+		Yjs:    yjsProxy,
 	}
 
 	router := api.NewRouter(deps)

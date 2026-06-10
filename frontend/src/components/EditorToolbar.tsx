@@ -1,26 +1,31 @@
+import type { SyncStatus } from '../hooks/useYjsRoom'
+
 interface Props {
   path: string
   language: string
-  dirty: boolean
-  saving: boolean
+  status: SyncStatus
   canEdit: boolean
-  onSave: () => void
 }
 
-export function EditorToolbar({ path, language, dirty, saving, canEdit, onSave }: Props) {
+const statusLabel: Record<SyncStatus, { text: string; color: string }> = {
+  connecting: { text: '● connecting', color: '#e2c08d' },
+  connected: { text: '● live', color: '#6cc070' },
+  disconnected: { text: '● offline', color: 'salmon' },
+}
+
+export function EditorToolbar({ path, language, status, canEdit }: Props) {
+  const s = statusLabel[status]
   return (
     <div style={bar}>
       <span style={{ color: '#ccc' }}>
         {path}
-        {dirty && <span title="Unsaved changes" style={{ color: '#e2c08d' }}> ●</span>}
+        {!canEdit && <span style={{ color: '#888' }}> (read-only)</span>}
       </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ color: '#888', fontSize: 12 }}>{language}</span>
-        {canEdit && (
-          <button onClick={onSave} disabled={saving || !dirty}>
-            {saving ? 'Saving…' : 'Save (Ctrl+S)'}
-          </button>
-        )}
+        <span title="Realtime sync status" style={{ color: s.color, fontSize: 12 }}>
+          {s.text}
+        </span>
       </div>
     </div>
   )

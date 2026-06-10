@@ -1,17 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../lib/store'
-import {
-  createFile,
-  deleteFile,
-  getFileContent,
-  getRoom,
-  saveFileContent,
-} from '../lib/rooms'
+import { createFile, deleteFile, getFileContent, getRoom } from '../lib/rooms'
 import type { FileMeta, Room as RoomType } from '../lib/types'
 import { FileTree } from '../components/FileTree'
-import { CodeEditor } from '../components/Editor'
+import { CollaborativeEditor } from '../components/CollaborativeEditor'
 import { EditorToolbar } from '../components/EditorToolbar'
+import { useYjsRoom } from '../hooks/useYjsRoom'
 
 export function Room() {
   const { slug = '' } = useParams()
@@ -23,12 +18,6 @@ export function Room() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Editor state for the selected file.
-  const [content, setContent] = useState('')
-  const [dirty, setDirty] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [loadingContent, setLoadingContent] = useState(false)
-
   useEffect(() => {
     setLoading(true)
     getRoom(slug)
@@ -39,30 +28,6 @@ export function Room() {
       .catch((err) => setError((err as Error).message))
       .finally(() => setLoading(false))
   }, [slug])
-
-  // Load content whenever the selected file changes. A request token guards
-  // against a slow fetch for an old file overwriting a newer selection.
-  const reqToken = useRef(0)
-  useEffect(() => {
-    if (!selected) {
-      setContent('')
-      setDirty(false)
-      return
-    }
-    const token = ++reqToken.current
-    setLoadingContent(true)
-    setDirty(false)
-    getFileContent(slug, selected.id)
-      .then((res) => {
-        if (token === reqToken.current) setContent(res.content)
-      })
-      .catch((err) => {
-        if (token === reqToken.current) setError((err as Error).message)
-      })
-      .finally(() => {
-        if (token === reqToken.current) setLoadingContent(false)
-      })
-  }, [slug, selected])
 
   const canEdit = !!room && !!user && room.owner_id === user.id
 
@@ -76,19 +41,6 @@ export function Room() {
     await deleteFile(slug, fileId)
     setFiles((fs) => fs.filter((f) => f.id !== fileId))
     setSelected((s) => (s?.id === fileId ? null : s))
-  }
-
-  async function handleSave() {
-    if (!selected || !dirty) return
-    setSaving(true)
-    try {
-      await saveFileContent(slug, selected.id, content)
-      setDirty(false)
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setSaving(false)
-    }
   }
 
   if (loading) return <Centered>Loading…</Centered>
@@ -121,35 +73,51 @@ export function Room() {
         <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#1e1e1e' }}>
           {!selected ? (
             <Placeholder>Select a file</Placeholder>
-          ) : loadingContent ? (
-            <Placeholder>Loading {selected.path}…</Placeholder>
           ) : (
-            <>
-              <EditorToolbar
-                path={selected.path}
-                language={selected.language}
-                dirty={dirty}
-                saving={saving}
-                canEdit={canEdit}
-                onSave={handleSave}
-              />
-              <div style={{ flex: 1, minHeight: 0 }}>
-                <CodeEditor
-                  language={selected.language}
-                  value={content}
-                  readOnly={!canEdit}
-                  onChange={(v) => {
-                    setContent(v)
-                    setDirty(true)
-                  }}
-                  onSave={handleSave}
-                />
-              </div>
-            </>
+            // Keyed by file id so switching files remounts the pane — each file
+            // gets its own Y.Doc + provider, and no content bleeds across files.
+            <EditorPane key={selected.id} slug={slug} file={selected} canEdit={canEdit} />
           )}
         </main>
       </div>
     </div>
+  )
+}
+
+// EditorPane owns the realtime lifecycle for a single file. It connects a
+// Y.Doc to the sidecar (via the authenticated Go proxy) and seeds the doc from
+// the file's saved content the first time it's opened.
+function EditorPane({ slug, file, canEdit }: { slug: string; file: FileMeta; canEdit: boolean }) {
+  const { doc, provider, status } = useYjsRoom(slug, file.id)
+  const [initialContent, setInitialContent] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    getFileContent(slug, file.id)
+      .then((res) => alive && setInitialContent(res.content))
+      .catch(() => alive && setInitialContent(''))
+    return () => {
+      alive = false
+    }
+  }, [slug, file.id])
+
+  // Wait for the saved content to load before mounting the binding, so the
+  // seed-if-empty check sees the real starting text.
+  if (initialContent === null) return <Placeholder>Loading {file.path}…</Placeholder>
+
+  return (
+    <>
+      <EditorToolbar path={file.path} language={file.language} status={status} canEdit={canEdit} />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <CollaborativeEditor
+          doc={doc}
+          provider={provider}
+          language={file.language}
+          readOnly={!canEdit}
+          initialContent={initialContent}
+        />
+      </div>
+    </>
   )
 }
 
