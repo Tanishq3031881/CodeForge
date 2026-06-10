@@ -22,6 +22,13 @@ func NewRouter(d *Deps) http.Handler {
 	// keep a single, slash-free path segment (avoids WS roomname URL-encoding).
 	r.Get("/ws/yjs/{id}", d.YjsWS)
 
+	// Sidecar↔backend traffic, gated by a shared secret, not user JWTs.
+	r.Route("/internal", func(r chi.Router) {
+		r.Use(d.RequireInternal)
+		r.Get("/files/{id}/yjs-state", d.GetYjsState)
+		r.Post("/files/{id}/yjs-state", d.SaveYjsState)
+	})
+
 	r.Route("/api", func(r chi.Router) {
 		r.Post("/auth/signup", d.Signup)
 		r.Post("/auth/login", d.Login)

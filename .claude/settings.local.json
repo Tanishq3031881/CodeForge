@@ -25,7 +25,16 @@
       "Bash(JWT_SECRET=dev-insecure-change-me go run *)",
       "Bash(node test-sync.mjs)",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(node --input-type=module -e ' *)"
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(git commit -q -m 'Stage 6: real-time Yjs sync via Node sidecar + authenticated Go WS proxy *)",
+      "Bash(gofmt -w ./internal/api/deps.go ./cmd/server/main.go)",
+      "Bash(JWT_SECRET=dev-insecure-change-me INTERNAL_KEY=dev-internal-key /tmp/cf-server.exe *)",
+      "Bash(PORT=1234 HOST=127.0.0.1 BACKEND_URL=http://127.0.0.1:8080 INTERNAL_KEY=dev-internal-key PERSIST_DEBOUNCE_MS=1000 node server.js)",
+      "PowerShell($p = \\(Get-NetTCPConnection -LocalPort 1234 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess; if \\($p\\) { Stop-Process -Id $p -Force; \"killed PID $p on 1234\" } else { \"nothing on 1234\" })",
+      "Bash(node test-persist.mjs setup)",
+      "PowerShell($p = \\(Get-NetTCPConnection -LocalPort 1234 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess; if \\($p\\) { Stop-Process -Id $p -Force; \"killed sidecar PID $p\" } else { \"nothing on 1234\" })",
+      "Bash(node test-persist.mjs reload)",
+      "Bash(git commit -q -m 'Stage 7: persist Yjs state to Postgres via shared-secret internal API *)"
     ]
   }
 }

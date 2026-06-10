@@ -110,6 +110,36 @@ func (s *Store) SetContent(ctx context.Context, id, content string) error {
 	return nil
 }
 
+// GetYjsState returns the persisted Yjs CRDT state for a file, or nil if the
+// column is NULL (file never edited in realtime yet).
+func (s *Store) GetYjsState(ctx context.Context, id string) ([]byte, error) {
+	var state []byte
+	err := s.pool.QueryRow(ctx, `SELECT yjs_state FROM files WHERE id = $1`, id).Scan(&state)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return state, nil
+}
+
+// SetYjsState persists the CRDT state and the decoded plain text together.
+// content is kept in sync so the Stage 5 content endpoint and the sandbox
+// always see the latest text without needing to decode Yjs in Go.
+func (s *Store) SetYjsState(ctx context.Context, id string, state []byte, text string) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE files SET yjs_state = $2, content = $3, updated_at = now() WHERE id = $1`,
+		id, state, text)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) Delete(ctx context.Context, id string) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM files WHERE id = $1`, id)
 	if err != nil {

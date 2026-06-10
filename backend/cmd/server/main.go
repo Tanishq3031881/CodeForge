@@ -39,13 +39,14 @@ func main() {
 	}
 
 	deps := &api.Deps{
-		Pool:   pool,
-		Users:  userService,
-		Store:  userStore,
-		Rooms:  roomService,
-		Files:  fileService,
-		Issuer: issuer,
-		Yjs:    yjsProxy,
+		Pool:        pool,
+		Users:       userService,
+		Store:       userStore,
+		Rooms:       roomService,
+		Files:       fileService,
+		Issuer:      issuer,
+		Yjs:         yjsProxy,
+		InternalKey: cfg.InternalKey,
 	}
 
 	router := api.NewRouter(deps)

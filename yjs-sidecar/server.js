@@ -12,7 +12,13 @@
 
 const http = require('http')
 const WebSocket = require('ws')
-const { setupWSConnection } = require('y-websocket/bin/utils')
+const { setupWSConnection, setPersistence } = require('y-websocket/bin/utils')
+const { makePersistence } = require('./persistence')
+
+// Persist documents to Postgres through the Go backend's internal API. Load
+// failures are tolerated (a missing backend just means no prior state), so
+// enabling this unconditionally is safe even in a backend-less dev run.
+setPersistence(makePersistence())
 
 const host = process.env.HOST || '127.0.0.1'
 const port = parseInt(process.env.PORT || '1234', 10)

@@ -52,8 +52,18 @@ docker-compose.yml, Makefile
       `content` column added via migration 004. Awaiting user's manual commit.
       NOTE: not yet driven in a real browser — backend proven via curl, frontend
       type-checks + builds clean. Monaco loads from its CDN loader (needs net).
-- [ ] Stage 6 — Real-time Yjs sync (hardest)
-- [ ] Stage 7 — Persist Yjs state to Postgres
+- [x] **Stage 6** — Real-time Yjs sync. DONE, verified: two clients converge
+      bidirectionally through the authenticated Go WS proxy; bad-JWT WS → 401.
+      Node sidecar (`yjs-sidecar/`, doc name = file ID, localhost-only),
+      `internal/ws/proxy.go`, `api/yjs.go` (`/ws/yjs/{id}?token&slug`),
+      frontend `useYjsRoom` + `CollaborativeEditor` (MonacoBinding). The old
+      single-user `Editor.tsx` + Stage-5 save flow were removed.
+- [x] **Stage 7** — Persist Yjs to Postgres. DONE, verified: edit → kill+restart
+      sidecar → fresh client loads persisted text from DB. Internal endpoints
+      `GET/POST /internal/files/{id}/yjs-state` gated by `X-Internal-Key`
+      (constant-time compare; 401 without it). Sidecar `persistence.js` loads on
+      first connect, debounced save (PERSIST_DEBOUNCE_MS) + final save on close;
+      stores yjs_state (base64) + decoded text into `files.content`.
 - [ ] Stage 8 — Docker sandbox execution (most resume value)
 - [ ] Stage 9 — Cursor presence + polish
 - [ ] Stage 10 — Deployment

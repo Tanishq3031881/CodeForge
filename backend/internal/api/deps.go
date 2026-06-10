@@ -17,4 +17,6 @@ type Deps struct {
 	Files  *files.Service
 	Issuer *auth.Issuer
 	Yjs    *ws.Proxy
+	// InternalKey is the shared secret the Yjs sidecar presents on /internal/*.
+	InternalKey string
 }

@@ -126,6 +126,21 @@ func (s *Service) SaveContent(ctx context.Context, slug, userID, fileID, content
 	return s.store.SetContent(ctx, fileID, content)
 }
 
+// LoadYjsState returns a file's persisted CRDT state for the sidecar to apply
+// on first connection. Called only via the internal (shared-secret) API, so it
+// does no per-user authorisation.
+func (s *Service) LoadYjsState(ctx context.Context, fileID string) ([]byte, error) {
+	return s.store.GetYjsState(ctx, fileID)
+}
+
+// SaveYjsState persists CRDT state plus its decoded text. Internal API only.
+func (s *Service) SaveYjsState(ctx context.Context, fileID string, state []byte, text string) error {
+	if len(text) > maxContentBytes {
+		return ErrTooLarge
+	}
+	return s.store.SetYjsState(ctx, fileID, state, text)
+}
+
 // cleanPath normalises a user-supplied file path and strips any directory
 // traversal, leaving a clean relative path like "src/main.py".
 func cleanPath(p string) string {

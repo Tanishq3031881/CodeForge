@@ -7,6 +7,7 @@ type Config struct {
 	DatabaseURL string
 	JWTSecret   string
 	YjsURL      string
+	InternalKey string
 }
 
 func LoadConfig() *Config {
@@ -15,6 +16,7 @@ func LoadConfig() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://codeforge:codeforge_dev@localhost:5432/codeforge?sslmode=disable"),
 		JWTSecret:   getEnv("JWT_SECRET", "dev-insecure-change-me"),
 		YjsURL:      getEnv("YJS_URL", "http://127.0.0.1:1234"),
+		InternalKey: getEnv("INTERNAL_KEY", "dev-internal-key"),
 	}
 }
 
