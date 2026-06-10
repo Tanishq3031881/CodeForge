@@ -17,5 +17,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {}
     throw new Error(msg)
   }
+  // 204 No Content (e.g. DELETE) has no body to parse.
+  if (res.status === 204) return undefined as T
   return res.json()
 }

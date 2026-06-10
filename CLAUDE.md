@@ -44,8 +44,14 @@ docker-compose.yml, Makefile
 - [x] **Stage 3** — Auth: signup/login/JWT/bcrypt + Zustand. Commit `a64b4f1`.
       ⚠️ Backend committed, but FRONTEND for Stage 3 is still UNCOMMITTED
       (pages/, lib/store.ts, App.tsx + api.ts edits are untracked/modified).
-- [ ] **Stage 4** — Rooms & Files CRUD (no editing yet). ← **IN PROGRESS, barely started.**
-- [ ] Stage 5 — Monaco editor (single-user)
+- [x] **Stage 4** — Rooms & Files CRUD. DONE, verified end-to-end against live
+      Postgres (signup→room→file→delete + authz/validation edge cases). Awaiting
+      user's manual commit.
+- [x] **Stage 5** — Monaco editor (single-user). DONE, verified end-to-end:
+      content GET/PUT, persistence, public-viewer read-only, 1 MiB cap.
+      `content` column added via migration 004. Awaiting user's manual commit.
+      NOTE: not yet driven in a real browser — backend proven via curl, frontend
+      type-checks + builds clean. Monaco loads from its CDN loader (needs net).
 - [ ] Stage 6 — Real-time Yjs sync (hardest)
 - [ ] Stage 7 — Persist Yjs state to Postgres
 - [ ] Stage 8 — Docker sandbox execution (most resume value)

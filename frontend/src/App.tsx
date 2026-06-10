@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
 import { Dashboard } from './pages/Dashboard'
+import { Room } from './pages/Room'
 import { useAuth } from './lib/store'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -20,6 +21,14 @@ function App() {
           element={
             <RequireAuth>
               <Dashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/r/:slug"
+          element={
+            <RequireAuth>
+              <Room />
             </RequireAuth>
           }
         />
